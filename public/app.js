@@ -13,6 +13,7 @@ const clearButton = document.querySelector("#clearButton");
 const imageInput = document.querySelector("#imageInput");
 const visualFigure = document.querySelector("#visualFigure");
 const visualImage = document.querySelector("#visualImage");
+const voiceAudio = document.querySelector("#voiceAudio");
 
 const ctx = canvas.getContext("2d");
 let drawing = false;
@@ -201,6 +202,8 @@ async function startVoice() {
   if (realtime) {
     realtime.pc.close();
     realtime.media?.getTracks().forEach((track) => track.stop());
+    voiceAudio.srcObject = null;
+    voiceAudio.classList.remove("active");
     realtime = null;
     voiceButton.textContent = "Start voice";
     voiceButton.classList.remove("active");
@@ -210,19 +213,13 @@ async function startVoice() {
 
   setStatus("Starting voice session...");
   try {
-    const tokenResponse = await fetch("/api/realtime-token");
-    const tokenData = await tokenResponse.json();
-    if (!tokenData.value) {
-      const message = typeof tokenData.error === "string" ? tokenData.error : tokenData.message;
-      setStatus(message || "Set OPENAI_API_KEY to enable live voice.");
-      return;
-    }
-
     const pc = new RTCPeerConnection();
-    const audio = document.createElement("audio");
-    audio.autoplay = true;
     pc.ontrack = (event) => {
-      audio.srcObject = event.streams[0];
+      voiceAudio.srcObject = event.streams[0];
+      voiceAudio.classList.add("active");
+      voiceAudio.play().catch(() => {
+        setStatus("Voice connected. Tap the audio play button if Safari is blocking autoplay.");
+      });
     };
 
     let media;
@@ -235,6 +232,17 @@ async function startVoice() {
     pc.addTrack(media.getAudioTracks()[0]);
 
     const dc = pc.createDataChannel("oai-events");
+    dc.addEventListener("message", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "session.created") setStatus("Voice connected. Start talking.");
+        if (data.type === "input_audio_buffer.speech_started") setStatus("I hear you...");
+        if (data.type === "response.audio.done") setStatus("Voice response complete.");
+        if (data.type === "error") setStatus(data.error?.message || "Realtime voice error.");
+      } catch {
+        // Ignore non-JSON messages.
+      }
+    });
     dc.addEventListener("open", () => {
       dc.send(
         JSON.stringify({
@@ -256,26 +264,26 @@ async function startVoice() {
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
+    const sdpResponse = await fetch("/api/realtime-session", {
       method: "POST",
       body: offer.sdp,
       headers: {
-        authorization: `Bearer ${tokenData.value}`,
         "content-type": "application/sdp"
       }
     });
     if (!sdpResponse.ok) {
       media.getTracks().forEach((track) => track.stop());
-      setStatus("Voice connection failed. Check your OpenAI key and Realtime API access.");
+      const message = await sdpResponse.text();
+      setStatus(message || "Voice connection failed. Check your OpenAI key and Realtime API access.");
       return;
     }
     const answer = { type: "answer", sdp: await sdpResponse.text() };
     await pc.setRemoteDescription(answer);
 
-    realtime = { pc, dc, audio, media };
+    realtime = { pc, dc, audio: voiceAudio, media };
     voiceButton.textContent = "Stop voice";
     voiceButton.classList.add("active");
-    setStatus("Voice tutor is live.");
+    setStatus("Voice tutor is live. Start talking, or tap the audio control if Safari stays silent.");
   } catch (error) {
     setStatus(error.message || "Voice mode failed to start.");
   }
