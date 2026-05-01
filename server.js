@@ -105,6 +105,41 @@ async function createRealtimeSession(req, res) {
   sendJson(res, upstream.status, data);
 }
 
+async function createRealtimeCall(req, res) {
+  if (!apiKey) {
+    return sendJson(res, 401, {
+      error: "Set OPENAI_API_KEY to enable live Realtime voice."
+    });
+  }
+
+  const sdp = (await readBody(req)).toString("utf8");
+  const session = JSON.stringify({
+    type: "realtime",
+    model: "gpt-realtime",
+    instructions:
+      "You are a live math tutor. Speak naturally and briefly. When math should appear on screen, describe the math intent clearly and ask the app to render it as LaTeX. Do not spell long formulas aloud unless the student asks.",
+    audio: {
+      output: { voice: "marin" }
+    }
+  });
+
+  const form = new FormData();
+  form.set("sdp", sdp);
+  form.set("session", session);
+
+  const upstream = await fetch("https://api.openai.com/v1/realtime/calls", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`
+    },
+    body: form
+  });
+
+  const answer = await upstream.text();
+  res.writeHead(upstream.status, { "content-type": "application/sdp; charset=utf-8" });
+  res.end(answer);
+}
+
 async function analyzeBoard(req, res) {
   const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
 
@@ -231,10 +266,19 @@ async function serveStatic(req, res) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (req.method === "OPTIONS" && req.url === "/api/realtime-session") {
+      res.writeHead(204, {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "POST, OPTIONS",
+        "access-control-allow-headers": "content-type"
+      });
+      return res.end();
+    }
     if (req.method === "GET" && req.url === "/api/health") {
       return sendJson(res, 200, { ok: true, openai: Boolean(apiKey) });
     }
     if (req.method === "GET" && req.url === "/api/realtime-token") return createRealtimeSession(req, res);
+    if (req.method === "POST" && req.url === "/api/realtime-session") return createRealtimeCall(req, res);
     if (req.method === "POST" && req.url === "/api/analyze-board") return analyzeBoard(req, res);
     if (req.method === "POST" && req.url === "/api/generate-visual") return generateVisual(req, res);
     if (req.method === "GET") return serveStatic(req, res);
