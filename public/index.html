@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live AI Math Tutor</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <aside class="sidebar">
+        <div>
+          <p class="eyebrow">Live workspace</p>
+          <h1>AI Math Tutor</h1>
+        </div>
+
+        <label class="field">
+          <span>Problem context</span>
+          <textarea id="problemInput" rows="5">Evaluate the integral from 0 to A of x squared dx.</textarea>
+        </label>
+
+        <div class="controls">
+          <button id="voiceButton" class="primary" type="button">Start voice</button>
+          <button id="analyzeButton" type="button">Check board</button>
+          <button id="visualButton" type="button">Generate visual</button>
+          <button id="clearButton" type="button">Clear ink</button>
+        </div>
+
+        <label class="upload">
+          <input id="imageInput" type="file" accept="image/*" />
+          Upload screenshot
+        </label>
+
+        <div class="status" id="status">Ready. Demo mode works without an API key.</div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Student board</p>
+            <h2>Write with Apple Pencil, mouse, or touch</h2>
+          </div>
+          <div class="toolstrip" aria-label="Drawing tools">
+            <button class="icon selected" data-tool="pen" type="button" title="Pen">Pen</button>
+            <button class="icon" data-tool="eraser" type="button" title="Eraser">Erase</button>
+          </div>
+        </header>
+
+        <div class="boardWrap" id="boardWrap">
+          <canvas id="inkCanvas"></canvas>
+          <div id="mathLayer" class="mathLayer"></div>
+        </div>
+      </section>
+
+      <aside class="tutorPanel">
+        <div>
+          <p class="eyebrow">Tutor notes</p>
+          <h2 id="tutorSummary">Waiting for work</h2>
+        </div>
+        <div id="steps" class="steps"></div>
+        <figure id="visualFigure" class="visualFigure hidden">
+          <img id="visualImage" alt="Generated visual explanation" />
+          <figcaption>Generated visual explanation</figcaption>
+        </figure>
+      </aside>
+    </main>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
