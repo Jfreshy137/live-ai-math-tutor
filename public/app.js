@@ -200,6 +200,7 @@ async function generateVisual() {
 async function startVoice() {
   if (realtime) {
     realtime.pc.close();
+    realtime.media?.getTracks().forEach((track) => track.stop());
     realtime = null;
     voiceButton.textContent = "Start voice";
     voiceButton.classList.remove("active");
@@ -208,60 +209,76 @@ async function startVoice() {
   }
 
   setStatus("Starting voice session...");
-  const tokenResponse = await fetch("/api/realtime-token");
-  const tokenData = await tokenResponse.json();
-  if (!tokenData.value) {
-    setStatus(tokenData.message || "Set OPENAI_API_KEY to enable live voice.");
-    return;
-  }
-
-  const pc = new RTCPeerConnection();
-  const audio = document.createElement("audio");
-  audio.autoplay = true;
-  pc.ontrack = (event) => {
-    audio.srcObject = event.streams[0];
-  };
-
-  const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-  pc.addTrack(media.getAudioTracks()[0]);
-
-  const dc = pc.createDataChannel("oai-events");
-  dc.addEventListener("open", () => {
-    dc.send(
-      JSON.stringify({
-        type: "conversation.item.create",
-        item: {
-          type: "message",
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: `We are tutoring this problem: ${problemInput.value}. When you mention math, also provide concise math intent so the app can render LaTeX.`
-            }
-          ]
-        }
-      })
-    );
-    dc.send(JSON.stringify({ type: "response.create" }));
-  });
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
-    method: "POST",
-    body: offer.sdp,
-    headers: {
-      authorization: `Bearer ${tokenData.value}`,
-      "content-type": "application/sdp"
+  try {
+    const tokenResponse = await fetch("/api/realtime-token");
+    const tokenData = await tokenResponse.json();
+    if (!tokenData.value) {
+      const message = typeof tokenData.error === "string" ? tokenData.error : tokenData.message;
+      setStatus(message || "Set OPENAI_API_KEY to enable live voice.");
+      return;
     }
-  });
-  const answer = { type: "answer", sdp: await sdpResponse.text() };
-  await pc.setRemoteDescription(answer);
 
-  realtime = { pc, dc, audio, media };
-  voiceButton.textContent = "Stop voice";
-  voiceButton.classList.add("active");
-  setStatus("Voice tutor is live.");
+    const pc = new RTCPeerConnection();
+    const audio = document.createElement("audio");
+    audio.autoplay = true;
+    pc.ontrack = (event) => {
+      audio.srcObject = event.streams[0];
+    };
+
+    let media;
+    try {
+      media = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setStatus("Microphone is blocked. Allow microphone access for this site, refresh, then tap Start voice again.");
+      return;
+    }
+    pc.addTrack(media.getAudioTracks()[0]);
+
+    const dc = pc.createDataChannel("oai-events");
+    dc.addEventListener("open", () => {
+      dc.send(
+        JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `We are tutoring this problem: ${problemInput.value}. When you mention math, also provide concise math intent so the app can render LaTeX.`
+              }
+            ]
+          }
+        })
+      );
+      dc.send(JSON.stringify({ type: "response.create" }));
+    });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
+      method: "POST",
+      body: offer.sdp,
+      headers: {
+        authorization: `Bearer ${tokenData.value}`,
+        "content-type": "application/sdp"
+      }
+    });
+    if (!sdpResponse.ok) {
+      media.getTracks().forEach((track) => track.stop());
+      setStatus("Voice connection failed. Check your OpenAI key and Realtime API access.");
+      return;
+    }
+    const answer = { type: "answer", sdp: await sdpResponse.text() };
+    await pc.setRemoteDescription(answer);
+
+    realtime = { pc, dc, audio, media };
+    voiceButton.textContent = "Stop voice";
+    voiceButton.classList.add("active");
+    setStatus("Voice tutor is live.");
+  } catch (error) {
+    setStatus(error.message || "Voice mode failed to start.");
+  }
 }
 
 canvas.addEventListener("pointerdown", (event) => {
