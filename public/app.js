@@ -6,6 +6,7 @@ const stepsEl = document.querySelector("#steps");
 const tutorSummary = document.querySelector("#tutorSummary");
 const problemInput = document.querySelector("#problemInput");
 const voiceButton = document.querySelector("#voiceButton");
+const autoButton = document.querySelector("#autoButton");
 const analyzeButton = document.querySelector("#analyzeButton");
 const visualButton = document.querySelector("#visualButton");
 const clearButton = document.querySelector("#clearButton");
@@ -20,6 +21,8 @@ let lastPoint = null;
 let uploadedImageDataUrl = "";
 let realtime = null;
 let lastVisualPrompt = "";
+let autoTutorTimer = null;
+let analysisInFlight = false;
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -130,22 +133,47 @@ function renderFeedback(feedback) {
 }
 
 async function analyzeBoard() {
+  if (analysisInFlight) return;
+  analysisInFlight = true;
   setStatus("Checking the board...");
-  const imageDataUrl = uploadedImageDataUrl || canvas.toDataURL("image/png");
-  const response = await fetch("/api/analyze-board", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      problem: problemInput.value,
-      imageDataUrl
-    })
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    setStatus(data.error || "Board analysis failed.");
+  try {
+    const imageDataUrl = uploadedImageDataUrl || canvas.toDataURL("image/png");
+    const response = await fetch("/api/analyze-board", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        problem: problemInput.value,
+        imageDataUrl
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setStatus(data.error || "Board analysis failed.");
+      return;
+    }
+    renderFeedback(data);
+  } catch (error) {
+    setStatus(error.message || "Board analysis failed.");
+  } finally {
+    analysisInFlight = false;
+  }
+}
+
+function toggleAutoTutor() {
+  if (autoTutorTimer) {
+    clearInterval(autoTutorTimer);
+    autoTutorTimer = null;
+    autoButton.classList.remove("active");
+    autoButton.textContent = "Auto tutor";
+    setStatus("Auto tutor paused.");
     return;
   }
-  renderFeedback(data);
+
+  autoButton.classList.add("active");
+  autoButton.textContent = "Pause auto";
+  setStatus("Auto tutor is watching the board every 6 seconds.");
+  analyzeBoard();
+  autoTutorTimer = setInterval(analyzeBoard, 6000);
 }
 
 async function generateVisual() {
@@ -290,6 +318,7 @@ imageInput.addEventListener("change", () => {
 });
 
 analyzeButton.addEventListener("click", analyzeBoard);
+autoButton.addEventListener("click", toggleAutoTutor);
 visualButton.addEventListener("click", generateVisual);
 voiceButton.addEventListener("click", startVoice);
 window.addEventListener("resize", resizeCanvas);
