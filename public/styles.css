@@ -155,6 +155,12 @@ button.primary.active {
   border-color: var(--warn);
 }
 
+button.active:not(.primary) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  background: #e0eee9;
+}
+
 .upload input {
   position: absolute;
   inline-size: 1px;
