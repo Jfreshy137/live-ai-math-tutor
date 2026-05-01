@@ -177,6 +177,15 @@ button.active:not(.primary) {
   line-height: 1.45;
 }
 
+.voiceAudio {
+  display: none;
+  width: 100%;
+}
+
+.voiceAudio.active {
+  display: block;
+}
+
 .toolstrip {
   display: flex;
   gap: 8px;
