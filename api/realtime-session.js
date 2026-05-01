@@ -1,6 +1,16 @@
 import { sendJson } from "./_openai.js";
 
 export default async function handler(req, res) {
+  res.setHeader("access-control-allow-origin", "*");
+  res.setHeader("access-control-allow-methods", "POST, OPTIONS");
+  res.setHeader("access-control-allow-headers", "content-type");
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
   if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
 
   const apiKey = process.env.OPENAI_API_KEY;
